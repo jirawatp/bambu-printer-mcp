@@ -1,0 +1,27 @@
+{
+  "name": "bambu-printer-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mock-only Bambu Lab multi-model MCP prototype with conservative capability discovery",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/src/cli.js",
+    "demo": "node dist/examples/demo.js",
+    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/mcp.test.js",
+    "check": "npm run typecheck && npm test",
+    "prepublishOnly": "node -e \"throw new Error('Publishing is disabled for this prototype')\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@types/node": "^22.0.0",
+    "typescript": "7.0.2"
+  }
+}
