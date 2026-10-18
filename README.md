@@ -6,6 +6,8 @@ A **mock-only TypeScript MCP server prototype** for a shared Bambu Lab printer i
 
 ## Run
 
+**Docker is the intended runtime.** Build and launch the restricted stdio container using the [Docker guide](docs/docker.md). It includes MCP host configuration, modest CPU/RAM limits and a container smoke test. The local Node commands below are useful for development.
+
 Use Node.js **22.19 or newer** and npm:
 
 ```sh
@@ -71,6 +73,7 @@ The official X2D manual documents LAN-only Developer Mode, but its scope is firm
 - [Capability and compatibility matrix](docs/capability-matrix.md)
 - [Official documentation research and source limitations](docs/official-research.md)
 - [Security model](SECURITY.md)
+- [Docker build, runtime and resource limits](docs/docker.md)
 - [Real hardware validation plan](docs/hardware-validation.md)
 
 Tests include adapter/telemetry validation, default-deny controls, stale/expired/replayed plans and an official MCP client/server integration over subprocess stdio. CI runs the mock checks on Node 22 and 24. Dependencies are locked, install scripts are disabled, and the package is marked private to prevent npm publication.

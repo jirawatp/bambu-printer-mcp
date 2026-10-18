@@ -12,6 +12,7 @@ This prototype is local, **mock-only**, and hardware-untested. Report software i
 - Camera output is a synthetic placeholder and separately gated. No camera URL or credentials are returned.
 - MCP errors use bounded application messages; no raw transport exception is sent to the client. Server diagnostics use stderr.
 - Dependencies are locked. Installs disable lifecycle scripts. CI has read-only repository permissions and does not persist checkout credentials. No printer or cloud secrets are used by tests.
+- The Docker runtime uses the unprivileged `node` user with root-owned application files and production dependencies. The documented run command disables networking, writes, Linux capabilities and privilege escalation, mounts no host data/devices/socket, and limits CPU, RAM and processes. These runtime flags are operator configuration; the image alone cannot enforce them.
 
 ## Trust limits
 

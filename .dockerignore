@@ -1,0 +1,20 @@
+# Allowlist the build inputs so local secrets, Git data and host dependencies
+# never enter the context. Keep exclusions after directory inclusions.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!.npmrc
+!tsconfig.json
+!src/
+!src/**/*.ts
+!tests/
+!tests/**/*.ts
+!examples/
+!examples/**/*.ts
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12

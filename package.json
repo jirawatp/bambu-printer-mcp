@@ -13,6 +13,7 @@
     "demo": "node dist/examples/demo.js",
     "test": "npm run build && node --test dist/tests/core.test.js dist/tests/mcp.test.js",
     "check": "npm run typecheck && npm test",
+    "test:docker": "node scripts/docker-smoke.mjs",
     "prepublishOnly": "node -e \"throw new Error('Publishing is disabled for this prototype')\""
   },
   "dependencies": {
