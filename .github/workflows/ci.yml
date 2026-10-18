@@ -21,3 +21,34 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
+      - name: Build and test container (native Linux amd64)
+        if: matrix.node == 24
+        run: docker build --tag bambu-printer-mcp:local .
+      - name: Verify non-root production runtime and image size
+        if: matrix.node == 24
+        run: |
+          test "$(docker image inspect --format '{{.Config.User}}' bambu-printer-mcp:local)" = 'node:node'
+          image_bytes=$(docker image inspect --format '{{.Size}}' bambu-printer-mcp:local)
+          echo "Runtime image size: ${image_bytes} bytes"
+          test "$image_bytes" -lt 268435456
+          docker run --rm --init --pull=never --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --cpus 0.5 --memory 256m --pids-limit 64 \
+            --log-driver none --entrypoint node bambu-printer-mcp:local --input-type=module -e '
+              import assert from "node:assert/strict";
+              import { existsSync, writeFileSync } from "node:fs";
+              import { createRequire } from "node:module";
+              assert.equal(process.getuid(), 1000);
+              const require = createRequire(import.meta.url);
+              for (const name of ["typescript", "@modelcontextprotocol/client"]) {
+                assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" });
+              }
+              for (const path of ["/app/src", "/app/tests", "/app/dist/tests", "/app/.git"]) {
+                assert.equal(existsSync(path), false);
+              }
+              assert.throws(() => writeFileSync("/app/write-check", "no"),
+                (error) => ["EROFS", "EACCES"].includes(error.code));
+              console.log("Non-root production runtime and read-only filesystem verified.");
+            '
+      - name: Verify mock MCP stdio through restricted Docker runtime
+        if: matrix.node == 24
+        run: npm run test:docker
