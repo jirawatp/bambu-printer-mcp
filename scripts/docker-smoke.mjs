@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/client';
-import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 const runFile = promisify(execFile);
 const defaultImage = 'bambu-printer-mcp:local';
@@ -43,6 +43,10 @@ async function main() {
   }
 
   const containerName = `bambu-mcp-smoke-${randomUUID()}`;
+  const dockerEnvironment = getDefaultEnvironment();
+  for (const name of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) {
+    if (process.env[name] !== undefined) dockerEnvironment[name] = process.env[name];
+  }
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(new Error('Docker MCP smoke check timed out after 45 seconds')), 45_000);
   const options = { timeout: 10_000, signal: abort.signal };
@@ -55,6 +59,7 @@ async function main() {
       '--security-opt', 'no-new-privileges', '--cpus', '0.5', '--memory', '256m',
       '--pids-limit', '64', '--log-driver', 'none', image,
     ],
+    env: dockerEnvironment,
     stderr: 'pipe',
     maxBufferSize: 1_048_576,
   });
@@ -111,7 +116,9 @@ async function main() {
       } finally {
         try {
           // Only this invocation's unique container may be removed; never prune shared resources.
-          await runFile('docker', ['rm', '--force', containerName], { timeout: 5_000, maxBuffer: 4_096 });
+          await runFile('docker', ['rm', '--force', containerName], {
+            env: dockerEnvironment, timeout: 5_000, maxBuffer: 4_096,
+          });
         } catch (error) {
           // --rm usually removed it already. A failed daemon connection is reported above.
           if (!/No such container/i.test(error.stderr ?? '') && !process.exitCode) {
