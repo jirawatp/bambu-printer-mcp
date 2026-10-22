@@ -34,6 +34,25 @@ The [third-party integration wiki, official Spanish version](https://wiki.bambul
 
 The [official network-port reference](https://wiki.bambulab.com/en/general/printer-network-ports) lists LAN MQTT TCP 8883, FTP TCP 990 and LAN-video TCP 322/6000. A port table is not a published message schema, endpoint contract, authentication specification or per-model compatibility guarantee. The prototype must not fabricate MQTT payloads, assume one camera protocol, disable certificate verification, or treat a reported open port as authorization to control a printer.
 
+## X2D LAN read-only contract ledger (implementation research)
+
+Sources: the public [BambuStudio](https://github.com/bambulab/BambuStudio) source (the networking plugin itself is closed), its `resources/printers/N6.json`, and the official [network-port reference](https://wiki.bambulab.com/en/general/printer-network-ports). Studio-side evidence shows how Studio talks to printers; it is not an X2D firmware guarantee. The same ledger is encoded in `src/lan-contract.ts` and tested.
+
+| Item | Value | Evidence |
+| --- | --- | --- |
+| LAN MQTT port | 8883/tcp, TLS | official documentation (port reference; N6 `support_ssl_for_mqtt`) |
+| X2D identity | model N6, serial prefix `20P` | official Studio model definition |
+| MQTT username / password | `bblp` / printer access code | first-party Studio source |
+| Status envelope | `print.command == "push_status"`; `msg` 0 full, 1 diff, absent = full on LAN | first-party Studio source |
+| Whitelisted fields | `gcode_state`, `mc_percent`, `mc_remaining_time` (minutes), `bed_temper`, packed `device.bed_temp` (low 16 bits current) | first-party Studio source |
+| Report topic `device/<serial>/report` | **unproven** | implementation choice; no vendor-authored definition found |
+| MQTT protocol version 3.1.1 | **unproven** | implementation choice |
+| Subscription QoS 0 | **unproven** | implementation choice |
+| X2D installed firmware and emitted schema | **unknown** | never observed |
+| Extruder-id to physical nozzle mapping | **unknown**; nozzle temperatures stay `null` | not established; H2D is not silently mapped |
+
+The four unproven/unknown rows are why admission is closed: `LanReadOnlySession` cannot be constructed until each of those four ledger items carries `official-documentation` or `first-party-source` evidence. There is no override; an earlier acknowledgement string was removed because it would have manufactured verification. Public research (2026-10-22) searched official Bambu documentation and the public BambuStudio source: the Studio networking layer delegates connection, topic construction, MQTT version and subscription QoS to a dynamically loaded, non-free plugin, so those details are not publicly specified. This is a scoped negative result, not proof that no vendor contract exists, and no proprietary binary was reverse engineered. The installed firmware can only be read from the device. Retained messages are treated as age-unknown history and never as current telemetry.
+
 ## Evidence limitations and validation next steps
 
 The X2D PDF was opened and its text verified directly. Some wiki direct fetches returned errors; those claims were checked against search-indexed content from the linked official pages. Translated official wiki pages can lag or contain translation errors. No API SDK, device credential, developer agreement or network plugin was obtained.

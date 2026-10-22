@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   mock-tests:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,7 +20,15 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run check
+      - name: Typecheck, build and run tests with the 90% coverage gate
+        run: npm run check
+      - name: Prove the coverage gate fails when a threshold is raised
+        # Reuses the V8 data written by `npm run check`; does not rerun the suite.
+        run: |
+          rc=0
+          output=$(npx --no c8 report --lines 101 --reporter=text-summary 2>&1) || rc=$?
+          test "$rc" -ne 0
+          printf '%s\n' "$output" | grep -q 'does not meet global threshold (101%)'
       - run: npm audit --omit=dev --audit-level=high
       - name: Build and test container (native Linux amd64)
         if: matrix.node == 24
@@ -39,7 +48,7 @@ jobs:
               import { createRequire } from "node:module";
               assert.equal(process.getuid(), 1000);
               const require = createRequire(import.meta.url);
-              for (const name of ["typescript", "@modelcontextprotocol/client"]) {
+              for (const name of ["typescript", "c8", "@modelcontextprotocol/client"]) {
                 assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" });
               }
               for (const path of ["/app/src", "/app/tests", "/app/dist/tests", "/app/.git"]) {

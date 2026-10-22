@@ -10,7 +10,7 @@ With a Docker-compatible daemon already running:
 docker build --tag bambu-printer-mcp:local .
 ```
 
-The multi-stage build installs the lockfile with lifecycle scripts disabled, runs all unit and MCP stdio tests inside the builder, removes development dependencies, and copies only compiled server code and production dependencies into the runtime. The official Node 24 Alpine base is pinned to a multi-architecture digest in `Dockerfile`; it includes Linux arm64 and amd64. Build natively on Apple Silicon; no emulation or multi-platform build is needed for local use.
+The multi-stage build installs the lockfile with lifecycle scripts disabled, runs `npm run check` inside the builder (type-check, build, all unit and MCP stdio tests, and the 90% global coverage gate; `.c8rc.json` and `scripts/coverage-inventory.mjs` are in the allowlisted build context), removes development dependencies, and copies only compiled server code and production dependencies into the runtime. The official Node 24 Alpine base is pinned to a multi-architecture digest in `Dockerfile`; it includes Linux arm64 and amd64. Build natively on Apple Silicon; no emulation or multi-platform build is needed for local use.
 
 The pin fixes the base contents and npm's lockfile fixes package contents; this is reproducible dependency selection, not a claim of byte-identical image digests or an automatic security-update mechanism. Review/update the base digest and lockfile deliberately and rerun checks. No registry login or image publishing is required. The runtime uses UID/GID 1000 (`node`); application files are root-owned and cannot be edited by that user.
 
@@ -24,7 +24,7 @@ docker run --rm --interactive --init --pull=never \
   bambu-printer-mcp:local
 ```
 
-Keep stdin attached with `--interactive`; omit `--tty` because a terminal can alter MCP framing. No published port, volume, device, host networking or Docker socket mount is needed. The process waits for an MCP client; an empty terminal is expected. Mock controls/camera remain disabled. To exercise simulations only, append `--enable-mock-controls` and/or `--enable-mock-camera` after the image name.
+The documented container has networking disabled, so the operator-only X2D LAN read-only flag cannot work (and must not be used) inside it; run that path only with the host Node commands in [hardware validation](hardware-validation.md). Keep stdin attached with `--interactive`; omit `--tty` because a terminal can alter MCP framing. No published port, volume, device, host networking or Docker socket mount is needed. The process waits for an MCP client; an empty terminal is expected. Mock controls/camera remain disabled. To exercise simulations only, append `--enable-mock-controls` and/or `--enable-mock-camera` after the image name.
 
 For an MCP host accepting `mcpServers` configuration:
 
@@ -56,7 +56,7 @@ npm ci --ignore-scripts
 npm run test:docker
 ```
 
-The smoke test launches a restricted container through the official MCP client, verifies the five fixtures and X2D telemetry, and checks that controls and camera default off. It cleans up only its own named disposable container. CI also inspects non-root image configuration, production-only dependencies and image size. No image is pushed to a registry. CI's Docker job validates Linux amd64; a native Apple Silicon image still needs local build/run validation.
+The smoke test launches a restricted container through the official MCP client, verifies the five fixtures and X2D telemetry, and checks that controls and camera default off. It cleans up only its own named disposable container. CI also inspects non-root image configuration, production-only dependencies (TypeScript, c8 and the MCP client are absent from the runtime) and image size. No image is pushed to a registry. CI's Docker job validates Linux amd64; a native Apple Silicon image still needs local build/run validation.
 
 ## Keep Mac resource use modest
 

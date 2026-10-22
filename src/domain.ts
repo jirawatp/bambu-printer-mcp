@@ -34,11 +34,29 @@ export interface Provenance {
   compatibility: 'synthetic-fixture-only';
 }
 
+/**
+ * Provenance of an operator-enabled, subscribe-only LAN observation. Every
+ * verification flag is literally false: the report topic, MQTT version, QoS and X2D
+ * firmware/schema are unresolved, so nothing here asserts hardware compatibility.
+ */
+export interface LiveProvenance {
+  transport: 'lan-readonly';
+  protocol: 'bambu-lan-mqtt-observation';
+  hardwareValidated: false;
+  compatibility: 'operator-observation-unverified-contract';
+  contractVerified: false;
+  firmwareVerified: false;
+  schemaVerified: false;
+  nozzleMapping: 'unknown';
+  freshness: 'fresh' | 'stale' | 'none';
+  ageMs: number | null;
+}
+
 export interface PrinterDescriptor {
   id: string;
   family: PrinterFamily;
   firmware: string;
-  transport: 'mock';
+  transport: 'mock' | 'lan-readonly';
   hardwareValidated: false;
 }
 
@@ -50,7 +68,7 @@ export interface PrinterStatus extends PrinterDescriptor {
   progressPercent: number | null;
   temperatures: { nozzlesC: (number | null)[]; bedC: number | null };
   timeRemainingSeconds: number | null;
-  provenance: Provenance;
+  provenance: Provenance | LiveProvenance;
   warnings: string[];
 }
 
@@ -68,7 +86,7 @@ export interface PrinterCapabilities extends PrinterDescriptor {
   cancel: Capability;
   print: Capability;
   camera: Capability;
-  provenance: Provenance;
+  provenance: Provenance | LiveProvenance;
 }
 
 /** Programmatic policy only enables local simulations, never hardware access. */
@@ -121,7 +139,10 @@ export type ServiceErrorCode =
   | 'CONFIRMATION_REQUIRED'
   | 'PLAN_NOT_FOUND'
   | 'PLAN_EXPIRED'
-  | 'STALE_PLAN';
+  | 'STALE_PLAN'
+  | 'LIVE_CONFIG_INVALID'
+  | 'CONTRACT_UNVERIFIED'
+  | 'LIVE_UNAVAILABLE';
 
 /** Predictable, secret-free errors suitable for MCP tool error responses. */
 export class ServiceError extends Error {

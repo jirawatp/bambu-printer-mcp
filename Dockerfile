@@ -5,10 +5,11 @@ WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
-COPY tsconfig.json ./
+COPY tsconfig.json .c8rc.json ./
 COPY src ./src
 COPY tests ./tests
 COPY examples ./examples
+COPY scripts/coverage-inventory.mjs ./scripts/coverage-inventory.mjs
 # Test inside the build environment, then retain production dependencies only.
 RUN npm run check \
     && npm prune --omit=dev --ignore-scripts --no-audit --no-fund \

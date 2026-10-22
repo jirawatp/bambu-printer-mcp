@@ -2,19 +2,24 @@
   "name": "bambu-printer-mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "Mock-only Bambu Lab multi-model MCP prototype with conservative capability discovery",
+  "description": "Mock-by-default Bambu Lab multi-model MCP prototype with conservative capability discovery and an operator-only, opt-in X2D read-only LAN observation",
   "type": "module",
   "license": "UNLICENSED",
-  "engines": { "node": ">=22.19.0" },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/cli.js",
     "demo": "node dist/examples/demo.js",
-    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/mcp.test.js",
+    "test": "npm run test:coverage",
     "check": "npm run typecheck && npm test",
     "test:docker": "node scripts/docker-smoke.mjs",
-    "prepublishOnly": "node -e \"throw new Error('Publishing is disabled for this prototype')\""
+    "smoke:x2d-readonly": "npm run build && node dist/src/lan-smoke.js",
+    "prepublishOnly": "node -e \"throw new Error('Publishing is disabled for this prototype')\"",
+    "test:unit": "npm run build && node --test dist/tests/*.test.js",
+    "test:coverage": "npm run build && c8 node --test dist/tests/*.test.js && node scripts/coverage-inventory.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
@@ -23,6 +28,7 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "^22.0.0",
+    "c8": "12.0.0",
     "typescript": "7.0.2"
   }
 }

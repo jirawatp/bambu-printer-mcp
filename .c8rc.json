@@ -1,0 +1,26 @@
+{
+  "all": true,
+  "src": [
+    "dist/src"
+  ],
+  "include": [
+    "dist/src/**/*.js"
+  ],
+  "extension": [
+    ".js"
+  ],
+  "exclude": [],
+  "exclude-after-remap": false,
+  "check-coverage": true,
+  "statements": 90,
+  "branches": 90,
+  "functions": 90,
+  "lines": 90,
+  "reporter": [
+    "text",
+    "json",
+    "json-summary",
+    "lcov"
+  ],
+  "reports-dir": "coverage"
+}

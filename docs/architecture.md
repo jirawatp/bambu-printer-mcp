@@ -4,7 +4,7 @@
 
 One MCP stdio interface for five synthetic family fixtures (A1, P1, X1, H2, X2D), with independent exact-firmware adapter profiles and in-memory mock transports. Read operations prioritize state, progress, nozzle/bed temperatures and estimated time remaining. Simulation-only pause/cancel/print and camera interfaces exercise conservative discovery and explicit policy gating.
 
-No printer connection, actual firmware adapter, network scanning, cloud login, device credential, physical action, settings change, arbitrary command dispatch, file upload, slicing or real video streaming is implemented. The owner has not authorized live hardware testing in this task.
+The one exception is an opt-in **X2D LAN read-only telemetry observation**, implemented and tested offline but currently **admission-blocked** (no live session can be constructed until the wire contract is vendor-verified): a subscribe-only MQTT session to one exact private-IPv4 host over verified TLS on port 8883, exposed as `live-x2d` with unknown nozzle mapping and unverified provenance. No network scanning, cloud login, persisted credential, physical action, settings change, arbitrary command dispatch, file upload, slicing or real video streaming is implemented. Agents and automated tests never connect; only the operator could ever run the live path, and only after admission legitimately opens.
 
 ## Modules
 
@@ -15,7 +15,16 @@ No printer connection, actual firmware adapter, network scanning, cloud login, d
 | `src/mock-transport.ts` | Synthetic frames, revisions and simulator state changes |
 | `src/service.ts` | Registry, capability intersection, policies and bound action plans |
 | `src/server.ts` | Narrow MCP schemas, tool annotations and bounded responses |
-| `src/cli.ts` | Local stdio startup and explicit mock-only flags |
+| `src/cli.ts` | Local stdio startup, explicit mock flags and the opt-in `--enable-x2d-lan-readonly` flag; stdio EOF and signals release the live session once |
+| `src/lan-contract.ts` | Frozen evidence ledger (official / first-party-source / implementation-choice / unverified), fixed constants and the evidence-only admission rule |
+| `src/lan-config.ts` | Ephemeral operator input, private-IPv4/serial/access-code/CA validation; field-only errors |
+| `src/mqtt-codec.ts` | Send-restricted MQTT 3.1.1 codec: CONNECT, one SUBSCRIBE, PINGREQ, DISCONNECT only; fragment-tolerant bounded decoder with linear buffering (each byte copied once per packet) |
+| `src/x2d-telemetry.ts` | `push_status` whitelist normalizer (state, progress, bed, time remaining); drops diffs and everything else |
+| `src/lan-session.ts` | `LanReadOnlySession`, the only public live session: its constructor enforces `requireAdmission()` first, with no option or override |
+| `src/lan-engine.ts` | Observation mechanics behind the wrapper (deadlines, caps, freshness over the larger of wall and monotonic elapsed time, retained-report handling, outbound gate (permitted type, flags, length, no trailing bytes), fixed-text failure stages); imported by nothing but `lan-session.ts`, used directly only by offline tests |
+| `src/safe-file.ts` | Descriptor-based, size-bounded regular-file reader (non-blocking, no-follow open; refuses FIFOs, devices, directories) |
+| `src/lan-tls.ts` | `tls.connect` adapter with fixed verification and error reduction |
+| `src/lan-smoke.ts` | Operator smoke launcher: no arguments, stdin/inherited secrets, 60 s / 20 message / 1 MiB caps |
 
 Capabilities are a current intersection of recognized firmware, validated frame/state, adapter support and local policy. They are recomputed before action execution. Model names, product documentation, open ports and firmware version ordering do not grant capabilities. Unsupported firmware is rejected; missing telemetry stays unknown. All output carries synthetic/hardware-untested context.
 

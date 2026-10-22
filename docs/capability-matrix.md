@@ -1,6 +1,6 @@
 # Capability matrix
 
-This prototype has **no real printer transport**. MCP calls operate on in-memory fixtures. There is no LAN/cloud discovery, MQTT/FTP client, camera connection, credential input or physical print path. All actual Bambu Lab models and firmware are **hardware-untested**.
+By default this prototype has **no real printer transport**: MCP calls operate on in-memory fixtures. The only exception is a subscribe-only X2D LAN observation (`live-x2d`, four whitelisted telemetry fields) that is implemented but **admission-blocked**: `live-x2d` cannot currently appear in any real run. There is no LAN/cloud discovery, FTP client, camera connection, persisted credential or physical print path. All actual Bambu Lab models and firmware are **hardware-untested**; the live observation's MQTT contract and X2D firmware/schema are unverified.
 
 Vendor documentation and dates are linked in [official research](official-research.md). Documented device features do not certify this implementation.
 
@@ -20,11 +20,13 @@ The sole accepted firmware identifier is the invented **`mock-1.0`**, using the 
 
 | Interface | Default behavior | Optional simulator behavior | Hardware behavior |
 | --- | --- | --- | --- |
-| `list_printers` | Lists five synthetic fixtures | Same | No network discovery |
+| `list_printers` | Lists five synthetic fixtures | Same | No network discovery; appends `live-x2d` only if a live session exists, which the unverified contract currently prevents |
 | `get_printer_capabilities` | Reports exact fixture firmware, provenance, policy and current-state availability | Re-evaluates capabilities per call | No device capability probe |
-| `get_printer_status` | Reads synthetic state, progress %, nozzle/bed °C and seconds remaining | Same | Unavailable |
-| `prepare_mock_action` / `execute_mock_action` | Controls disabled | `--enable-mock-controls` enables simulated pause/cancel/print | Unavailable; startup flags cannot enable hardware |
-| `get_mock_camera` | Camera disabled | `--enable-mock-camera` returns a fixed synthetic SVG | Unavailable; no image from a real camera |
+| `get_printer_status` | Reads synthetic state, progress %, nozzle/bed °C and seconds remaining | Same | `live-x2d` only: state, progress, bed °C, time remaining from the latest fresh, non-retained frame (retained reports are ignored); `nozzlesC` empty; `LIVE_UNAVAILABLE` before the first frame, after any failure or end; values withheld when stale |
+| `prepare_mock_action` / `execute_mock_action` | Controls disabled | `--enable-mock-controls` enables simulated pause/cancel/print | Unavailable for `live-x2d` under every policy; no startup flag enables a hardware control |
+| `get_mock_camera` | Camera disabled | `--enable-mock-camera` returns a fixed synthetic SVG | Unavailable for `live-x2d`; no image from a real camera |
+
+`live-x2d` capabilities always report `firmwareSupported: false`, `fixtureNozzleCount: 0` (meaning no nozzle channel is reported, not that the printer has no nozzles) and an empty `nozzlesC` array in status (no nozzle reading is extracted and the count is unknown, never inferred as two slots), pause/cancel/print/camera unsupported with fixed reasons, and status supported only while telemetry is fresh. Its provenance records `transport: lan-readonly`, `hardwareValidated`, `contractVerified`, `firmwareVerified` and `schemaVerified` all `false`, `nozzleMapping: unknown`, freshness and age. The staleness threshold (60 s) is provisional because no X2D update interval has been measured.
 
 Status normalization returns `null` and warnings for absent, invalid or out-of-range values; it does not invent readings. A valid protocol permits reading partial telemetry. Mock mutations require complete, consistent telemetry and job binding. Temperature validation bounds are fixture input checks, not physical safety limits.
 

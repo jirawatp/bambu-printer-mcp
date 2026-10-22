@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import test, { type TestContext } from 'node:test';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { InMemoryTransport } from '@modelcontextprotocol/server';
+import { createServer } from '../src/server.js';
+import type { PrinterService } from '../src/service.js';
 import type {
   ActionPlan,
   MockCameraFrame,
@@ -254,5 +257,27 @@ test('CLI rejects hardware-oriented flags with exit 2 and no protocol stdout', {
     assert.equal(output.stdout, '');
     assert.match(output.stderr, /Unsupported option/);
     assert.match(output.stderr, /Hardware transport is unavailable/);
+  }
+});
+
+test('unexpected service failures return a generic secret-free tool error', { timeout: 15_000 }, async () => {
+  const failing = {
+    listPrinters: () => { throw new Error('SECRET /private/path token=abc'); },
+  } as unknown as PrinterService;
+  const server = createServer(failing);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'internal-error-test', version: '1.0.0' });
+  await server.connect(serverSide);
+  await client.connect(clientSide);
+  try {
+    const response = await client.callTool({ name: 'list_printers', arguments: {} });
+    assert.equal(response.isError, true);
+    assert.deepEqual(object(response.structuredContent), { code: 'INTERNAL_ERROR', message: 'Mock operation failed.' });
+    const text = response.content.find((item) => item.type === 'text');
+    assert.ok(text && text.type === 'text');
+    assert.doesNotMatch(text.text, /SECRET|private|token/);
+  } finally {
+    await client.close();
+    await server.close();
   }
 });

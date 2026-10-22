@@ -7,10 +7,13 @@ import {
   isSafeIdentifier,
   mockProvenance,
 } from './domain.js';
+import { LIVE_PRINTER_ID } from './lan-session.js';
+import type { LiveSession } from './lan-session.js';
 import type {
   ActionPlan,
   Capability,
   ExecuteActionInput,
+  LiveProvenance,
   MockCameraFrame,
   PrepareActionInput,
   PrinterCapabilities,
@@ -23,6 +26,14 @@ import { MockTransport, createDefaultMockFleet } from './mock-transport.js';
 
 // Convenience export for transport-independent MCP error handling.
 export { ServiceError } from './domain.js';
+
+/** All the service may use of a live session: read its descriptor and current observation. */
+type LiveSource = Pick<LiveSession, 'descriptor' | 'observation'>;
+
+const MAX_PENDING_PLANS = 1_000;
+const LIVE_CONTROL_REASON = 'The live X2D path is subscribe-only telemetry observation; pause, cancel, print and every other control are not implemented.';
+const LIVE_CAMERA_REASON = 'Camera access is not implemented for the live X2D path.';
+const NOZZLE_WARNING = 'Nozzle temperatures are unavailable: the extruder-to-nozzle mapping is unverified.';
 
 function capability(supported: boolean, enabled: string, disabled: string): Capability {
   return { supported, reason: supported ? enabled : disabled };
@@ -40,11 +51,23 @@ export class PrinterService {
   readonly #enableMockCamera: boolean;
   readonly #planTtlMs: number;
   readonly #now: () => number;
+  readonly #live: LiveSource | null;
 
-  constructor(transports: MockTransport[] = createDefaultMockFleet(), policy: ServicePolicy = {}) {
+  /**
+   * `live` is an optional, operator-started, subscribe-only X2D observation. It can only be read:
+   * no action, plan or camera path reaches it.
+   */
+  constructor(transports: MockTransport[] = createDefaultMockFleet(), policy: ServicePolicy = {}, live?: LiveSource) {
     if (!Array.isArray(transports) || transports.some((transport) => !(transport instanceof MockTransport))) {
       throw new ServiceError('INVALID_ARGUMENT', 'Only local MockTransport instances are accepted.');
     }
+    if (live !== undefined && (live === null || typeof live.descriptor !== 'function' || typeof live.observation !== 'function')) {
+      throw new ServiceError('INVALID_ARGUMENT', 'Only a live session may be attached as the live printer.');
+    }
+    if (live !== undefined && transports.some((transport) => transport.id === LIVE_PRINTER_ID)) {
+      throw new ServiceError('INVALID_ARGUMENT', 'Duplicate printer identifier.');
+    }
+    this.#live = live ?? null;
     for (const transport of transports) {
       if (this.#transports.has(transport.id)) throw new ServiceError('INVALID_ARGUMENT', 'Duplicate printer identifier.');
       this.#transports.set(transport.id, transport);
@@ -63,7 +86,68 @@ export class PrinterService {
   }
 
   listPrinters(): PrinterDescriptor[] {
-    return [...this.#transports.values()].map((transport) => transport.descriptor());
+    const printers = [...this.#transports.values()].map((transport) => transport.descriptor());
+    return this.#live === null ? printers : [...printers, this.#live.descriptor()];
+  }
+
+  #liveFor(printerId: unknown): LiveSource | null {
+    return printerId === LIVE_PRINTER_ID ? this.#live : null;
+  }
+
+  #liveProvenance(freshness: LiveProvenance['freshness'], ageMs: number | null): LiveProvenance {
+    return {
+      transport: 'lan-readonly',
+      protocol: 'bambu-lan-mqtt-observation',
+      hardwareValidated: false,
+      compatibility: 'operator-observation-unverified-contract',
+      contractVerified: false,
+      firmwareVerified: false,
+      schemaVerified: false,
+      nozzleMapping: 'unknown',
+      freshness,
+      ageMs,
+    };
+  }
+
+  #liveCapabilities(live: LiveSource): PrinterCapabilities {
+    const observation = live.observation();
+    const fresh = observation.phase === 'observing' && observation.freshness === 'fresh';
+    const reason = observation.phase === 'unavailable'
+      ? observation.reason
+      : observation.freshness === 'none' ? 'No telemetry frame has been accepted yet.' : 'Telemetry is stale; values are withheld.';
+    const freshness = observation.phase === 'observing' ? observation.freshness : 'none';
+    return {
+      ...live.descriptor(),
+      firmwareSupported: false,
+      // Not a fixture: the live nozzle channel count is unknown and never inferred; 0 means "none reported", not "no nozzles".
+      fixtureNozzleCount: 0,
+      status: capability(fresh, 'Fresh read-only telemetry observation is available; the MQTT contract and X2D firmware/schema are unverified.', reason),
+      pause: capability(false, '', LIVE_CONTROL_REASON),
+      cancel: capability(false, '', LIVE_CONTROL_REASON),
+      print: capability(false, '', LIVE_CONTROL_REASON),
+      camera: capability(false, '', LIVE_CAMERA_REASON),
+      provenance: this.#liveProvenance(freshness, observation.phase === 'observing' ? observation.ageMs : null),
+    };
+  }
+
+  #liveStatus(live: LiveSource): PrinterStatus {
+    const observation = live.observation();
+    if (observation.phase === 'unavailable') throw new ServiceError('LIVE_UNAVAILABLE', observation.reason);
+    if (observation.fields === null) throw new ServiceError('LIVE_UNAVAILABLE', 'No telemetry frame has been accepted yet.');
+    const stale = observation.freshness === 'stale';
+    const { fields } = observation;
+    return {
+      ...live.descriptor(),
+      revision: observation.acceptedFrames,
+      state: stale ? null : fields.state,
+      jobId: null,
+      progressPercent: stale ? null : fields.progressPercent,
+      // No nozzle readings are extracted and the nozzle count is unknown, matching fixtureNozzleCount 0 in capabilities.
+      temperatures: { nozzlesC: [], bedC: stale ? null : fields.bedC },
+      timeRemainingSeconds: stale ? null : fields.timeRemainingSeconds,
+      provenance: this.#liveProvenance(observation.freshness, observation.ageMs),
+      warnings: [...(stale ? ['Telemetry is stale; values are withheld.'] : observation.warnings), NOZZLE_WARNING],
+    };
   }
 
   #transport(printerId: string): MockTransport {
@@ -75,7 +159,8 @@ export class PrinterService {
 
   #time(): number {
     const value = this.#now();
-    if (!Number.isFinite(value) || value < 0) throw new ServiceError('INVALID_ARGUMENT', 'Clock must return a finite nonnegative timestamp.');
+    // Safe integers keep expiry arithmetic exact; huge values could overflow to Infinity.
+    if (!Number.isSafeInteger(value) || value < 0) throw new ServiceError('INVALID_ARGUMENT', 'Clock must return a safe nonnegative integer timestamp.');
     return value;
   }
 
@@ -115,11 +200,15 @@ export class PrinterService {
   }
 
   async getCapabilities(printerId: string): Promise<PrinterCapabilities> {
+    const live = this.#liveFor(printerId);
+    if (live !== null) return this.#liveCapabilities(live);
     const transport = this.#transport(printerId);
     return this.#capabilities(transport, await transport.read());
   }
 
   async getStatus(printerId: string): Promise<PrinterStatus> {
+    const live = this.#liveFor(printerId);
+    if (live !== null) return this.#liveStatus(live);
     const transport = this.#transport(printerId);
     if (!firmwareSupported(transport.descriptor())) throw new ServiceError('UNSUPPORTED_FIRMWARE', 'Only exact synthetic mock-1.0 firmware is implemented.');
     const adapted = adaptSnapshot(transport.descriptor(), await transport.read());
@@ -135,24 +224,28 @@ export class PrinterService {
     // Capture the caller's intent before yielding; later mutation of the input
     // object cannot alter the action or target bound into the plan.
     const { printerId, action, artifactId } = input;
+    if (this.#liveFor(printerId) !== null) throw new ServiceError('CAPABILITY_UNAVAILABLE', LIVE_CONTROL_REASON);
     const transport = this.#transport(printerId);
     const snapshot = await transport.read();
+    // A supported capability already requires complete, consistent action state for this
+    // same snapshot, so no second adaptation or redundant validity check is needed.
     const caps = this.#capabilities(transport, snapshot);
     if (!caps[action].supported) throw new ServiceError('CAPABILITY_UNAVAILABLE', caps[action].reason);
-    const adapted = adaptSnapshot(transport.descriptor(), snapshot);
-    if (!adapted.actionStateValid) throw new ServiceError('INVALID_FRAME', 'State changed or is incomplete; prepare again after checking status.');
+    const jobId = adaptSnapshot(transport.descriptor(), snapshot).status.jobId;
     const now = this.#time();
     this.#prunePlans(now);
     // Bound memory even if an untrusted caller prepares repeatedly without executing.
-    if (this.#plans.size >= 1_000) throw new ServiceError('CAPABILITY_UNAVAILABLE', 'Too many pending mock plans; wait for expiry.');
+    if (this.#plans.size >= MAX_PENDING_PLANS) throw new ServiceError('CAPABILITY_UNAVAILABLE', 'Too many pending mock plans; wait for expiry.');
+    const expiresAt = now + this.#planTtlMs;
+    if (expiresAt > Number.MAX_SAFE_INTEGER) throw new ServiceError('INVALID_ARGUMENT', 'Plan expiry would exceed the safe timestamp range.');
     const plan: Readonly<ActionPlan> = Object.freeze({
       planId: randomUUID(),
       printerId,
       action,
       artifactId: action === 'print' && isMockArtifactId(artifactId) ? artifactId : null,
-      jobId: adapted.status.jobId,
+      jobId,
       revision: snapshot.revision,
-      expiresAt: now + this.#planTtlMs,
+      expiresAt,
       notice: 'Mock simulation only. Caller confirmation is not independently verified human approval.',
     });
     this.#plans.set(plan.planId, plan);
@@ -187,6 +280,7 @@ export class PrinterService {
   }
 
   async getCamera(printerId: string): Promise<MockCameraFrame> {
+    if (this.#liveFor(printerId) !== null) throw new ServiceError('CAPABILITY_UNAVAILABLE', LIVE_CAMERA_REASON);
     const transport = this.#transport(printerId);
     const caps = await this.getCapabilities(printerId);
     if (!caps.camera.supported) throw new ServiceError('CAPABILITY_UNAVAILABLE', caps.camera.reason);
