@@ -1,0 +1,17 @@
+---
+description: Always-active project workflow, requested model roles, coverage and safe testing
+alwaysApply: true
+---
+
+# Required project workflow
+
+- Read AGENTS.md, README.md, design/security/validation documents, git status and relevant history before changes. Preserve existing work, scope and license decisions.
+- Use Cursor with GPT-5.6 Sol (`gpt-5.6-sol`) for planner/designer; Claude Sonnet 5.5 (`claude-sonnet-5-5`) for worker; Claude Opus 5.5 (`claude-opus-5-5`) for reviewer/advisor. The owner's spelling "Sonet 5.5" refers to the exact available Cursor label "Claude Sonnet 5.5".
+- Verify availability AND permission to execute each model. Picker visibility alone is insufficient. Do not use Auto, inherit a different model, accept silent fallback, or claim a role ran without actual execution evidence. If blocked/unavailable, stop dependent work and ask the owner/coordinator for a choice. Do not change team access settings.
+- Keep planner, worker and reviewer responsibilities separate. Plan before implementation; review the final diff and rerun affected checks after fixes. Record actual role/model execution and remaining blockers.
+- Enforce at least 90% statements, branches, functions and lines for all production TypeScript. Include entrypoints and security/error paths. Include unloaded production files. Do not lower thresholds, omit difficult modules, add broad ignores, or write assertions that only mirror implementation to raise numbers.
+- Native code must report all metrics the tool supports with explicit target/source scope. Pure fixture coverage does not prove hardware or Catalyst application coverage. Never combine unrelated coverage totals to hide a gap.
+- Test through synthetic fixtures, in-memory adapters and process mocks. Do not discover/connect to/operate physical equipment, printers/jobs/firmware, cameras or heating without the owner's separate approval of the specific action.
+- Scoped authorization: only the owner/operator may run a safe, read-only, subscribe-only observation of a supported X2D (opt-in `--enable-x2d-lan-readonly` or `npm run smoke:x2d-readonly`, ephemeral in-memory input); the path is currently admission-blocked with no override. Agents never read/print access codes, tokens, device addresses or serials or vendor-app private configuration, never connect/scan/discover, and never print/pause/cancel/heat/move/calibrate/change settings/update firmware/use the camera. Agent-run tests stay offline. Commit, push and a pull request for this repository are authorized after the independent Opus review; merge and deploy are not.
+- Do not create credentials/persistent access, expose network endpoints, publish/merge/deploy (push and pull request only as authorized above), buy services or accept agreements. Keep secrets out of output. Work in this repository only: do not change other projects, global tool configuration or MCP client configuration.
+- Completion requires reproducible setup, passing meaningful tests and coverage enforcement in normal checks/existing CI, a security/error-handling review, and accurate documentation. Rules are instructions, not proof of model routing or test execution.

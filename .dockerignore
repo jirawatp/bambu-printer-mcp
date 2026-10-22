@@ -7,12 +7,16 @@
 !package-lock.json
 !.npmrc
 !tsconfig.json
+!.c8rc.json
 !src/
 !src/**/*.ts
 !tests/
 !tests/**/*.ts
 !examples/
 !examples/**/*.ts
+!scripts/
+scripts/*
+!scripts/coverage-inventory.mjs
 **/.env
 **/.env.*
 **/*.pem

@@ -22,13 +22,15 @@ async function result(operation: () => unknown | Promise<unknown>): Promise<Call
 /** Local stdio MCP surface. No tool accepts device addresses, credentials or raw commands. */
 export function createServer(service = new PrinterService()): McpServer {
   const server = new McpServer({ name: 'bambu-printer-mcp', version: '0.1.0' }, {
-    instructions: 'This is a mock-only prototype. All printers and camera data are synthetic. '
-      + 'No hardware support is validated. Discover capabilities before each operation. '
+    instructions: 'This server is mock-only by default: all printers and camera data are synthetic. '
+      + 'No hardware support is validated. If the operator started it with the LAN read-only flag, one extra printer, live-x2d, '
+      + 'is a subscribe-only telemetry observation with an unverified contract and unknown nozzle mapping; it has no controls or camera. '
+      + 'Discover capabilities before each operation. '
       + 'Action confirmations are simulator workflow checks, not proof of human approval.',
   });
 
   server.registerTool('list_printers', {
-    description: 'List the five synthetic family fixtures; no network or device discovery.',
+    description: 'List the five synthetic family fixtures, plus live-x2d only when the operator enabled the read-only LAN observation; no discovery.',
     inputSchema: z.strictObject({}), annotations: readAnnotations,
   }, () => result(() => service.listPrinters()));
 
@@ -38,7 +40,7 @@ export function createServer(service = new PrinterService()): McpServer {
   }, ({ printerId }) => result(() => service.getCapabilities(printerId)));
 
   server.registerTool('get_printer_status', {
-    description: 'Read synthetic state, progress percent, nozzle/bed Celsius and seconds remaining; missing data is null.',
+    description: 'Read synthetic (or, for live-x2d, unverified read-only observed) state, progress percent, nozzle/bed Celsius and seconds remaining; missing data is null.',
     inputSchema: z.strictObject({ printerId }), annotations: readAnnotations,
   }, ({ printerId }) => result(() => service.getStatus(printerId)));
 
